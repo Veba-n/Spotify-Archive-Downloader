@@ -1661,7 +1661,7 @@ tr:hover .track-actions {
 
 
 .immersive-header {
-    position: fixed;
+    position: sticky;
     top: 0;
     width: 100%;
     z-index: 10010;
@@ -1677,6 +1677,12 @@ tr:hover .track-actions {
     flex-shrink: 0;
 }
 
+/* Fullscreen visualizer: fixed so it stays at viewport top */
+.is-fullscreen .immersive-header {
+    position: fixed;
+    left: 0;
+    right: 0;
+}
 
 .is-fullscreen .immersive-header,
 .lyrics-view .immersive-header {
