@@ -5,3 +5,4 @@ mutagen
 aiofiles
 aiohttp
 rich
+python-multipart

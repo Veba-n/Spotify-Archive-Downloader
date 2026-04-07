@@ -1,0 +1,54 @@
+<div class="details-header">
+    <h2 data-i18n="p_details_title">Now Playing</h2>
+    <button class="btn" id="btn-close-details" title="Close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12" />
+        </svg>
+    </button>
+</div>
+<div class="details-content">
+    <div class="details-cover-container">
+        <img id="details-cover" src="" alt="Cover" class="details-cover">
+        <input type="file" id="cover-upload-input" hidden accept="image/*">
+    </div>
+    <div class="details-info">
+        <h3 id="details-title">---</h3>
+        <p id="details-artist">---</p>
+    </div>
+    <div class="details-stats">
+        <div class="stat-item">
+            <span class="stat-label" data-i18n="p_th_album">Album</span>
+            <span class="stat-value" id="details-album">---</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label" data-i18n="p_th_duration">Duration</span>
+            <span class="stat-value" id="details-duration">---</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label" data-i18n="p_archived_at">Archived At</span>
+            <span class="stat-value" id="details-date">---</span>
+        </div>
+        <div class="stat-item" style="grid-column: span 2;">
+            <span class="stat-label">Source</span>
+            <a id="details-spotify" href="#" target="_blank" class="stat-value"
+                style="color: var(--primary); text-decoration: none; display: flex; align-items: center; gap: 4px;">
+                <span>Spotify</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
+                </svg>
+            </a>
+        </div>
+    </div>
+
+    <!-- Extra Info from Genius -->
+    <div class="details-extra-info">
+        <div class="extra-section" id="section-artist-bio" style="display: none;">
+            <h4 data-i18n="p_artist_bio" style="margin-bottom: 8px; color: var(--primary);">Artist Biography</h4>
+            <div id="details-artist-bio" class="extra-text"></div>
+        </div>
+        <div class="extra-section" id="section-song-info" style="display: none;">
+            <h4 data-i18n="p_song_info" style="margin-bottom: 8px; color: var(--primary);">About this Song</h4>
+            <div id="details-song-info" class="extra-text"></div>
+        </div>
+    </div>
+</div>

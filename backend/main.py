@@ -3,9 +3,10 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import FastAPI, BackgroundTasks, HTTPException, Request
+from fastapi import FastAPI, BackgroundTasks, HTTPException, Request, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List, Optional
 
@@ -22,6 +23,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve static files (CSS, JS, images) from the /static folder
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 db.init_db()
 
@@ -318,14 +322,11 @@ def stream_track(track_id: str, request: Request):
     """Stream track over the web (supports HTTP Range)"""
     with db.get_conn() as conn:
         row = conn.execute("SELECT output_path FROM jobs WHERE track_id=?", (track_id,)).fetchone()
-        
     if not row or not row['output_path']:
-        raise HTTPException(status_code=404, detail="Kayıt bulunamadı")
-        
+        raise HTTPException(status_code=404, detail="Track not found")
     file_path = Path(row['output_path'])
     if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Dosya diskte bulunamadı")
-        
+        raise HTTPException(status_code=404, detail="File not found on disk")
     # FileResponse automatically supports HTTP Range requests
     return FileResponse(file_path, media_type="audio/mpeg")
 
@@ -338,6 +339,21 @@ def serve_player():
         return player_path.read_text(encoding="utf-8")
     return "<h1>Player dosyası (static/player.html) bulunamadı.</h1>"
 
+
+@app.get("/api/lyrics/proxy")
+async def proxy_lyrics(url: str):
+    """Proxy Genius lyrics page to avoid CORS issues"""
+    import aiohttp
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8'
+    }
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers=headers) as resp:
+            if resp.status != 200:
+                raise HTTPException(status_code=resp.status, detail="Failed to fetch lyrics from Genius")
+            html = await resp.text()
+            return {"contents": html}
 
 @app.get("/local-cover/{playlist_name}/{track_id}")
 def serve_local_cover(playlist_name: str, track_id: str):
@@ -359,6 +375,154 @@ def serve_local_cover(playlist_name: str, track_id: str):
 async def _run_batch(session_id, playlist_meta, tracks, output_dir):
     """Download tracks in chunk in parallel"""
     await run_download_session(session_id, playlist_meta, tracks, output_dir)
+
+
+# --- Library Management ---
+
+class TrackUpdate(BaseModel):
+    title: str
+    artists: list
+    album: str
+
+@app.patch("/api/track/{track_id}")
+async def update_track(track_id: str, data: TrackUpdate):
+    """Update track metadata in DB and on disk"""
+    with db.get_conn() as conn:
+        row = conn.execute("SELECT output_path, cover_url FROM jobs WHERE track_id=?", (track_id,)).fetchone()
+    
+    if not row or not row['output_path']:
+        raise HTTPException(404, "Track not found")
+    
+    file_path = Path(row['output_path'])
+    if file_path.exists():
+        # Update ID3 Tags
+        try:
+            from tagger import tag_audio_file
+            # We need a local cover path if we want to preserve it during re-tagging
+            # For now, tag_audio_file will skip cover if cover_path is None
+            tag_audio_file(str(file_path), data.title, data.artists, data.album)
+        except Exception as e:
+            logging.error(f"Failed to update tags: {e}")
+    
+    db.update_track_metadata(track_id, data.title, data.artists, data.album)
+    return {"status": "ok"}
+
+
+@app.delete("/api/track/{track_id}")
+async def delete_track(track_id: str):
+    """Delete track from disk and DB"""
+    with db.get_conn() as conn:
+        row = conn.execute("SELECT output_path FROM jobs WHERE track_id=?", (track_id,)).fetchone()
+    
+    if row and row['output_path']:
+        file_path = Path(row['output_path'])
+        if file_path.exists():
+            file_path.unlink()
+            # Also clean up local cover if it's in a .covers folder
+            if ".covers" in str(file_path.parent):
+                pass # Already handled by folder structure usually
+    
+    db.delete_track(track_id)
+    return {"status": "ok"}
+
+
+@app.delete("/api/session/{session_id}")
+async def delete_session(session_id: str):
+    """Delete entire playlist folder and DB records"""
+    with db.get_conn() as conn:
+        row = conn.execute("SELECT output_dir FROM sessions WHERE session_id=?", (session_id,)).fetchone()
+    
+    if row and row['output_dir']:
+        path = Path(row['output_dir'])
+        if path.exists() and path.is_dir():
+            import shutil
+            shutil.rmtree(path)
+    
+    db.delete_session(session_id)
+    return {"status": "ok"}
+
+
+class SessionUpdate(BaseModel):
+    playlist_name: str
+
+@app.patch("/api/session/{session_id}")
+async def update_session(session_id: str, data: SessionUpdate):
+    """Rename a playlist session"""
+    now = datetime.utcnow().isoformat()
+    with db.get_conn() as conn:
+        conn.execute("UPDATE sessions SET playlist_name=?, updated_at=? WHERE session_id=?",
+                     (data.playlist_name, now, session_id))
+    return {"status": "ok"}
+
+
+@app.post("/api/session/{session_id}/cover")
+async def update_session_cover(session_id: str, file: UploadFile = File(...)):
+    """Upload new cover for a playlist"""
+    with db.get_conn() as conn:
+        row = conn.execute("SELECT output_dir, playlist_name FROM sessions WHERE session_id=?", (session_id,)).fetchone()
+    
+    if not row:
+        raise HTTPException(404, "Session not found")
+    
+    import shutil
+    output_dir = Path(row['output_dir']) if row['output_dir'] else MUSIC_OUTPUT_DIR / row['playlist_name']
+    cover_path = output_dir / "cover.jpg"
+    
+    with open(cover_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    
+    # Update cover_url in DB
+    now = datetime.utcnow().isoformat()
+    cover_url = f"/local-cover/{row['playlist_name']}/dummy"
+    with db.get_conn() as conn:
+        conn.execute("UPDATE sessions SET cover_url=?, updated_at=? WHERE session_id=?",
+                     (cover_url, now, session_id))
+    
+    return {"status": "ok", "cover_url": cover_url}
+
+@app.post("/api/track/{track_id}/cover")
+async def update_cover(track_id: str, file: UploadFile = File(...)):
+    """Upload new cover image, embed into file and update local cache"""
+    with db.get_conn() as conn:
+        row = conn.execute("SELECT output_path, session_id FROM jobs WHERE track_id=?", (track_id,)).fetchone()
+    
+    if not row or not row['output_path']:
+        raise HTTPException(404, "Track not found")
+    
+    file_path = Path(row['output_path'])
+    if not file_path.exists():
+        raise HTTPException(404, "Audio file not found")
+
+    # Save temp cover
+    temp_dir = Path("temp_covers")
+    temp_dir.mkdir(exist_ok=True)
+    temp_cover = temp_dir / f"{track_id}_{file.filename}"
+    
+    with open(temp_cover, "wb") as buffer:
+        import shutil
+        shutil.copyfileobj(file.file, buffer)
+
+    try:
+        from tagger import tag_audio_file
+        tag_audio_file(str(file_path), cover_path=str(temp_cover))
+        
+        # If it's a local archive file, also update the extracted cover in .covers
+        # to ensure UI refresh
+        if "local_" in row['session_id']:
+            clean_id = track_id.replace("file_", "")
+            # We need to find the session folder
+            with db.get_conn() as conn:
+                sess = conn.execute("SELECT output_dir FROM sessions WHERE session_id=?", (row['session_id'],)).fetchone()
+            if sess:
+                target_cover = Path(sess['output_dir']) / ".covers" / f"{clean_id}.jpg"
+                if target_cover.parent.exists():
+                    shutil.copy2(temp_cover, target_cover)
+                    
+    finally:
+        if temp_cover.exists():
+            temp_cover.unlink()
+
+    return {"status": "ok"}
 
 
 if __name__ == "__main__":

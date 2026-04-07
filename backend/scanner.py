@@ -115,10 +115,12 @@ def scan_and_rebuild_db():
                 # Convert duration to MM:SS
                 dur_str = f"{duration//60}:{int(duration%60):02d}" if duration > 0 else "0:00"
                 
+                from datetime import datetime
+                now = datetime.utcnow().isoformat()
                 conn.execute("""
-                    INSERT INTO jobs (session_id, track_id, title, artists, album, duration, cover_url, output_path, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'done')
-                """, (session_id, track_id, str(title), json.dumps(artists), str(album), dur_str, cover_url, str(file_path)))
+                    INSERT INTO jobs (session_id, track_id, title, artists, album, duration, cover_url, output_path, status, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'done', ?, ?)
+                """, (session_id, track_id, str(title), json.dumps(artists), str(album), dur_str, cover_url, str(file_path), now, now))
                 track_count += 1
             
             # Update session counts
