@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=420, initial-scale=1.0">
+    <title>Spotify Archive</title>
+    <link rel="stylesheet" href="popup.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        .lang-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            padding: 2px 6px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 10px;
+            transition: 0.2s;
+        }
+
+        .lang-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .lang-btn.active {
+            background: #1DB954;
+            border-color: #1DB954;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <header class="header">
+        <div class="header-left">
+            <div class="logo">
+                <svg viewBox="0 0 24 24" width="28" height="28" fill="none">
+                    <circle cx="12" cy="12" r="11" fill="#1DB954" />
+                    <path d="M8 15.5c3.5-1.2 7-0.8 9.5 0.8" stroke="#191414" stroke-width="1.8"
+                        stroke-linecap="round" />
+                    <path d="M7 12.2c4-1.5 8.5-1 11 1" stroke="#191414" stroke-width="1.8" stroke-linecap="round" />
+                    <path d="M6.5 9c4.5-1.8 10-1.2 12.5 1.2" stroke="#191414" stroke-width="1.8"
+                        stroke-linecap="round" />
+                </svg>
+            </div>
+            <div>
+                <h1 class="title" data-i18n="title">Spotify Archive</h1>
+                <p class="subtitle" id="subtitle" data-i18n="subtitle">Archive your playlist</p>
+            </div>
+        </div>
+        <div class="backend-badge" id="backendBadge">
+            <span class="dot" id="backendDot"></span>
+            <span id="backendText">Checking...</span>
+        </div>
+    </header>
+
+    <main>
+        <!-- Status Card -->
+        <section class="status-card" id="statusCard">
+            <div class="status-icon" id="statusIcon">
+                <svg viewBox="0 0 24 24" width="40" height="40" fill="none" id="idleIcon">
+                    <path
+                        d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"
+                        stroke="#1DB954" stroke-width="2" stroke-linecap="round" />
+                </svg>
+                <div class="spinner hidden" id="spinner"></div>
+            </div>
+            <div class="status-text">
+                <h2 id="statusTitle">Ready</h2>
+                <p id="statusMessage">Open a Spotify playlist to start downloading</p>
+            </div>
+        </section>
+
+        <!-- Progress Bar -->
+        <section class="progress-section hidden" id="progressSection">
+            <div class="progress-header">
+                <span id="progressLabel">Downloading...</span>
+                <span id="progressPercent">0%</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+            </div>
+            <div class="progress-stats">
+                <div class="stat">
+                    <span class="stat-value" id="statDone">0</span>
+                    <span class="stat-label" data-i18n="lbl_done">Done</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value" id="statPending">0</span>
+                    <span class="stat-label" data-i18n="lbl_pending">Pending</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value" id="statFailed">0</span>
+                    <span class="stat-label" data-i18n="lbl_failed">Failed</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value" id="statTotal">0</span>
+                    <span class="stat-label" data-i18n="lbl_total">Total</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Action Button -->
+        <button class="btn-primary" id="actionBtn">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+                <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="currentColor"
+                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span id="actionText">Download Playlist</span>
+        </button>
+
+        <!-- Past Sessions -->
+        <section class="sessions-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3 class="section-title" style="margin-bottom: 0;">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none">
+                        <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" />
+                    </svg>
+                    <span data-i18n="lbl_recent">Recent Downloads</span>
+                </h3>
+                <div style="display: flex; gap: 8px;">
+                    <button id="listenAppBtn" class="btn-resume"
+                        style="background: rgba(29, 185, 84, 0.2); color: #1db954; border: 1px solid rgba(29, 185, 84, 0.4);"
+                        data-i18n="lbl_listen">
+                        Listen Archive
+                    </button>
+                    <button id="resetAppBtn" class="btn-resume"
+                        style="background: rgba(255, 68, 68, 0.2); color: #ff4444; border: 1px solid rgba(255, 68, 68, 0.4);"
+                        data-i18n="lbl_reset">
+                        Reset
+                    </button>
+                </div>
+            </div>
+            <div id="sessionsList" class="sessions-list">
+                <p class="empty-text" data-i18n="no_downloads">No downloads yet</p>
+            </div>
+        </section>
+    </main>
+
+    <footer
+        style="display:flex; justify-content:center; gap:8px; padding:12px; border-top:1px solid rgba(255,255,255,0.06); background:var(--bg-primary);">
+        <button class="lang-btn" data-lang="en">ENGLISH</button>
+        <button class="lang-btn" data-lang="tr">TÜRKÇE</button>
+    </footer>
+
+    <script src="i18n.js"></script>
+    <script src="popup.js"></script>
+</body>
+
+</html>
