@@ -173,7 +173,7 @@ export const Visualizer = {
         }
 
         this.prevVolume = currentVolume;
-
+        if (!this.ctx) return;
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
         const cx = this.canvas.width / 2;
