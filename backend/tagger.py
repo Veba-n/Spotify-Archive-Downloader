@@ -7,8 +7,8 @@ from mutagen.mp4  import MP4, MP4Cover
 from mutagen.flac import FLAC, Picture
 
 
-def tag_audio_file(file_path: str, title: str, artists: list,
-                   album: str = '', cover_path: str = None):
+def tag_audio_file(file_path: str, title: str = None, artists: list = None,
+                   album: str = None, cover_path: str = None):
     """
     Automatically detect audio file format and use appropriate tagger.
     Supports MP3, M4A/AAC, and FLAC.
@@ -47,10 +47,11 @@ def _tag_mp3(path, title, artists, album, cover_path):
     except ID3NoHeaderError:
         tags = ID3()
 
-    tags['TIT2'] = TIT2(encoding=3, text=title)
-    tags['TPE1'] = TPE1(encoding=3, text='; '.join(artists))
-    tags['TPE2'] = TPE2(encoding=3, text=artists[0] if artists else '')
-    tags['TALB'] = TALB(encoding=3, text=album)
+    if title: tags['TIT2'] = TIT2(encoding=3, text=title)
+    if artists:
+        tags['TPE1'] = TPE1(encoding=3, text='; '.join(artists))
+        tags['TPE2'] = TPE2(encoding=3, text=artists[0] if artists else '')
+    if album: tags['TALB'] = TALB(encoding=3, text=album)
 
     if cover_path and Path(cover_path).exists():
         cover_data = Path(cover_path).read_bytes()
@@ -67,9 +68,9 @@ def _tag_mp3(path, title, artists, album, cover_path):
 
 def _tag_m4a(path, title, artists, album, cover_path):
     tags = MP4(str(path))
-    tags['\xa9nam'] = [title]
-    tags['\xa9ART'] = ['; '.join(artists)]
-    tags['\xa9alb'] = [album]
+    if title: tags['\xa9nam'] = [title]
+    if artists: tags['\xa9ART'] = ['; '.join(artists)]
+    if album: tags['\xa9alb'] = [album]
 
     if cover_path and Path(cover_path).exists():
         cover_data = Path(cover_path).read_bytes()
@@ -82,9 +83,9 @@ def _tag_m4a(path, title, artists, album, cover_path):
 
 def _tag_flac(path, title, artists, album, cover_path):
     audio = FLAC(str(path))
-    audio['title']  = [title]
-    audio['artist'] = ['; '.join(artists)]
-    audio['album']  = [album]
+    if title: audio['title']  = [title]
+    if artists: audio['artist'] = ['; '.join(artists)]
+    if album: audio['album']  = [album]
 
     if cover_path and Path(cover_path).exists():
         pic = Picture()

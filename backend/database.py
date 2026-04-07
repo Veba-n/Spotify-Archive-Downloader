@@ -190,12 +190,41 @@ def get_completed_tracks(session_id: str):
     """
     with get_conn() as conn:
         rows = conn.execute("""
-            SELECT track_id, title, artists, album, duration, cover_url, output_path
+            SELECT track_id, title, artists, album, duration, cover_url, output_path, spotify_url, created_at
             FROM jobs 
             WHERE session_id=? AND status=?
             ORDER BY job_id ASC
         """, (session_id, JobStatus.DONE)).fetchall()
     return [dict(r) for r in rows]
+
+
+def update_track_metadata(track_id: str, title: str, artists: list, album: str):
+    now = datetime.utcnow().isoformat()
+    with get_conn() as conn:
+        conn.execute("""
+            UPDATE jobs SET title=?, artists=?, album=?, updated_at=?
+            WHERE track_id=?
+        """, (title, json.dumps(artists), album, now, track_id))
+
+
+def delete_track(track_id: str):
+    with get_conn() as conn:
+        # Get session_id to update counts later?
+        track = conn.execute("SELECT session_id, status FROM jobs WHERE track_id=?", (track_id,)).fetchone()
+        if not track: return False
+        
+        conn.execute("DELETE FROM jobs WHERE track_id=?", (track_id,))
+        
+        # Update session counts
+        field = 'done_count' if track['status'] == JobStatus.DONE else 'fail_count'
+        conn.execute(f"UPDATE sessions SET total_tracks=total_tracks-1, {field}={field}-1 WHERE session_id=?", (track['session_id'],))
+    return True
+
+
+def delete_session(session_id: str):
+    with get_conn() as conn:
+        conn.execute("DELETE FROM jobs WHERE session_id=?", (session_id,))
+        conn.execute("DELETE FROM sessions WHERE session_id=?", (session_id,))
 
 
 def clear_all_data():
