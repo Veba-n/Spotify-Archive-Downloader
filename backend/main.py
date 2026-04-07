@@ -3,9 +3,9 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import FastAPI, BackgroundTasks, HTTPException, Request, File, UploadFile
+from fastapi import FastAPI, BackgroundTasks, HTTPException, Request, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List, Optional
@@ -13,6 +13,41 @@ from typing import List, Optional
 import database as db
 from downloader import run_download_session
 from config import MUSIC_OUTPUT_DIR, BACKEND_PORT
+
+import sys
+import argparse
+
+# Parse Arguments
+parser = argparse.ArgumentParser(description="Spotify Archive Backend")
+parser.add_argument("--rsync-lyric", action="store_true", help="Enable AI-powered lyric synchronization (Whisper)")
+args, unknown = parser.parse_known_args()
+
+USE_RSYNC = args.rsync_lyric
+whisper_model = None
+
+if USE_RSYNC:
+    try:
+        from faster_whisper import WhisperModel
+        import torch
+        import logging
+        
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        compute_type = "float16" if device == "cuda" else "int8"
+        
+        try:
+            print(f"🎤 Loading Faster-Whisper Model (small) on {device}...")
+            whisper_model = WhisperModel("small", device=device, compute_type=compute_type)
+            print(f"✅ Faster-Whisper Loaded successfully on {device}.")
+        except Exception as e:
+            print(f"⚠️ Faster-Whisper CUDA error: {e}. Falling back to CPU...")
+            whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
+            print("✅ Faster-Whisper Loaded successfully on CPU.")
+
+    except Exception as e:
+        print(f"⚠️ Faster-Whisper Critical Error: {e}")
+        whisper_model = None
+else:
+    print("ℹ️ AI Lyric Sync (Whisper) is disabled. Run with --rsync-lyric to enable.")
 
 app = FastAPI(title="Spotify Arşiv Backend", version="1.0.0")
 
@@ -375,6 +410,153 @@ def serve_local_cover(playlist_name: str, track_id: str):
 async def _run_batch(session_id, playlist_meta, tracks, output_dir):
     """Download tracks in chunk in parallel"""
     await run_download_session(session_id, playlist_meta, tracks, output_dir)
+
+
+@app.get("/api/config")
+async def get_config():
+    """Return runtime configuration and feature flags to the frontend"""
+    return {
+        "rsync_enabled": USE_RSYNC,
+        "whisper_status": "ready" if whisper_model is not None else "disabled"
+    }
+
+# --- STT Lyrics Sync Endpoints ---
+
+@app.get("/api/lyrics/sync/stream")
+async def stream_lyrics_sync(track_id: str, language: str = None, prompt: str = None):
+    """Process full audio track locally and yield segments directly to the frontend"""
+    sync_file = Path(MUSIC_OUTPUT_DIR) / f"{track_id}.sync.json"
+    
+    # 1. Check if we already mapped this song previously (Allow baked maps even if Whisper is off)
+    if sync_file.exists():
+        async def sync_generator():
+            try:
+                import json
+                import asyncio
+                with open(sync_file, "r") as f:
+                    data = json.load(f)
+                    # If it's a baked 'is_aligned' map, yield the whole thing immediately
+                    if data.get("is_aligned"):
+                        yield f"data: {json.dumps(data)}\n\n"
+                    else:
+                        # Otherwise yield raw segments
+                        for seg in data.get("segments", []):
+                            yield f"data: {json.dumps(seg)}\n\n"
+                            await asyncio.sleep(0.01)
+                yield "event: DONE\ndata: {}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        return StreamingResponse(sync_generator(), media_type="text/event-stream")
+    
+    # 2. If no baked data, we NEED Whisper to perform fresh transcription
+    if whisper_model is None:
+        raise HTTPException(
+            status_code=403, 
+            detail="AI Synchronizer is disabled for this session. Start with --rsync-lyric to enable."
+        )
+        
+    # 2. Locate the audio source
+    import glob
+    # Local files often have 'file_' prefix from scanner
+    search_id = track_id[5:] if track_id.startswith("file_") else track_id
+    
+    # Use recursive glob for subdirectories
+    matches = glob.glob(f"{MUSIC_OUTPUT_DIR}/**/*{search_id}*.*", recursive=True)
+    valid_exts = {".mp3", ".webm", ".m4a", ".opus", ".ogg", ".wav"}
+    matches = [m for m in matches if Path(m).suffix.lower() in valid_exts]
+    
+    if not matches:
+        raise HTTPException(status_code=404, detail="Track local audio not found")
+    
+    audio_path = matches[0]
+
+    # 3. Stream Whisper predictions directly to client as they decode
+    async def whisper_generator():
+        import threading
+        import json
+        import asyncio
+        loop = asyncio.get_event_loop()
+        queue = asyncio.Queue()
+        
+        def run_whisper():
+            try:
+                segments, info = whisper_model.transcribe(
+                    audio_path,
+                    beam_size=5,
+                    language=language,
+                    initial_prompt=prompt,
+                    condition_on_previous_text=False,
+                    vad_filter=False, # Disabled to prevent total audio erasure on loud tracks
+                    word_timestamps=True
+                )
+                
+                final_segments = []
+                for s in segments:
+                    words = []
+                    if s.words:
+                        words = [{"start": w.start, "end": w.end, "word": w.word.strip()} for w in s.words]
+                        
+                    seg_dict = {
+                        "start": s.start, 
+                        "end": s.end, 
+                        "text": s.text.strip(),
+                        "words": words
+                    }
+                    if not seg_dict["text"]: continue
+                    
+                    final_segments.append(seg_dict)
+                    loop.call_soon_threadsafe(queue.put_nowait, ("data", seg_dict))
+                    
+                with open(sync_file, "w") as f:
+                    json.dump({"segments": final_segments}, f)
+                    
+                loop.call_soon_threadsafe(queue.put_nowait, ("done", None))
+            except Exception as e:
+                import logging
+                logging.error(f"Streaming STT Error: {e}")
+                loop.call_soon_threadsafe(queue.put_nowait, ("error", str(e)))
+
+        thread = threading.Thread(target=run_whisper)
+        thread.start()
+        
+        while True:
+            ev_type, payload = await queue.get()
+            if ev_type == "done":
+                yield "event: DONE\ndata: {}\n\n"
+                break
+            elif ev_type == "error":
+                yield f"data: {json.dumps({'error': str(payload)})}\n\n"
+                break
+            else:
+                yield f"data: {json.dumps(payload)}\n\n"
+                
+    return StreamingResponse(whisper_generator(), media_type="text/event-stream")
+
+@app.post("/api/lyrics/sync/save")
+async def save_lyrics_sync(request: Request):
+    """Save a manually adjusted or high-confidence sync map to disk"""
+    try:
+        data = await request.json()
+        track_id = data.get("track_id")
+        lines = data.get("lines")
+        
+        if not track_id or not lines:
+            raise HTTPException(status_code=400, detail="Missing track_id or lines")
+            
+        sync_file = Path(MUSIC_OUTPUT_DIR) / f"{track_id}.sync.json"
+        
+        with open(sync_file, "w") as f:
+            import json
+            json.dump({
+                "track_id": track_id,
+                "is_aligned": True,
+                "lines": lines,
+                "saved_at": datetime.now().isoformat()
+            }, f)
+            
+        return {"status": "saved"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # --- Library Management ---

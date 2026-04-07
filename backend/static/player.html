@@ -274,15 +274,26 @@
 
     <div id="lyrics-view" class="lyrics-view" style="display:none;">
         <div class="immersive-header" id="lyrics-header">
+            <div class="header-left">
+                <button class="btn-close-immersive" id="btn-toggle-sync" title="Toggle Auto-Sync">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="icon-sync-status">
+                        <path d="M12 2L13.5 6.5L18 8L13.5 9.5L12 14L10.5 9.5L6 8L10.5 6.5L12 2Z"></path>
+                        <path d="M6 14L7 17L10 18L7 19L6 22L5 19L2 18L5 17L6 14Z"></path>
+                        <path d="M18 14L19 17L22 18L19 19L18 22L17 19L14 18L17 17L18 14Z"></path>
+                    </svg>
+                </button>
+            </div>
             <div class="header-now-playing">
                 <span class="label" data-i18n="p_now_playing">Now Playing</span>
                 <span class="imm-track-info">...</span>
             </div>
-            <button class="btn-close-immersive" id="btn-close-lyrics" title="Close"><svg viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="2">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg></button>
+            <div class="header-right">
+                <button class="btn-close-immersive" id="btn-close-lyrics" title="Close"><svg viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg></button>
+            </div>
         </div>
         <div class="lyrics-content">
             <div id="lyrics-text"></div>
@@ -296,15 +307,20 @@
     <div id="visualizer-container" class="visualizer-container hidden">
         <canvas id="visualizer-canvas"></canvas>
         <div class="immersive-header" id="viz-header">
+            <div class="header-left">
+                <!-- Balanced spacing -->
+            </div>
             <div class="header-now-playing">
                 <span class="label" data-i18n="p_now_playing">Now Playing</span>
                 <span class="imm-track-info">...</span>
             </div>
-            <button class="btn-close-immersive" id="btn-close-viz-full" title="Exit Fullscreen"><svg viewBox="0 0 24 24"
-                    fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg></button>
+            <div class="header-right">
+                <button class="btn-close-immersive" id="btn-close-viz-full" title="Exit Fullscreen"><svg
+                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg></button>
+            </div>
         </div>
         <div class="visualizer-hit-area"></div>
 

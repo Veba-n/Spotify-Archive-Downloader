@@ -1,0 +1,3 @@
+# Heavy AI dependencies for lyric synchronization
+faster-whisper
+torch

@@ -651,7 +651,6 @@ body::before {
     position: relative;
     z-index: 10000;
     /* Ensure player bar is above lyrics overlay */
-    gap: 16px;
     transition: background 0.4s, border-color 0.4s;
 }
 
@@ -663,7 +662,7 @@ body::before {
     -webkit-backdrop-filter: none !important;
     box-shadow: none !important;
     justify-content: center !important;
-    /* Center the controls */
+    /* Perfect centering for main toggle/progress bar */
     position: fixed !important;
     bottom: 0 !important;
     left: 0 !important;
@@ -672,21 +671,43 @@ body::before {
 }
 
 .lyrics-page-open .player-info,
+.viz-fullscreen-active .player-info {
+    display: flex !important;
+    position: absolute !important;
+    left: 16px !important;
+    width: auto !important;
+    bottom: 24px !important;
+}
+
 .lyrics-page-open .player-extra,
-.viz-fullscreen-active .player-info,
 .viz-fullscreen-active .player-extra {
+    display: flex !important;
+    position: absolute !important;
+    right: 32px !important;
+    width: auto !important;
+    bottom: 24px !important;
+}
+
+/* Specific button hiding in lyrics mode to reduce clutter */
+.lyrics-page-open #btn-sidebar-toggle,
+.lyrics-page-open #btn-details-toggle {
     display: none !important;
 }
 
 .lyrics-page-open .player-controls,
 .viz-fullscreen-active .player-controls {
     width: 600px !important;
+    max-width: 90vw !important;
+    /* Safety for smaller screens */
     flex: none !important;
+    margin: 0 !important;
+    /* Ensure centered controls */
 }
 
 
 .lyrics-page-open .player-bar>*,
 .viz-fullscreen-active .player-bar>* {
+    /* Removed display: flex !important to let .player-info properly hide */
     filter:
         drop-shadow(0 0 1px rgba(0, 0, 0, 0.9)) drop-shadow(0 0 3px rgba(0, 0, 0, 0.95)) drop-shadow(0 0 8px rgba(0, 0, 0, 0.9)) drop-shadow(0 0 16px rgba(0, 0, 0, 0.85)) drop-shadow(0 0 32px rgba(0, 0, 0, 0.8)) drop-shadow(0 0 48px rgba(0, 0, 0, 0.75)) drop-shadow(0 0 64px rgba(0, 0, 0, 0.7)) drop-shadow(0 0 96px rgba(0, 0, 0, 0.6));
 }
@@ -700,6 +721,23 @@ body::before {
     opacity: 1 !important;
 }
 
+.lyrics-page-open .progress-bar,
+.viz-fullscreen-active .progress-bar,
+.lyrics-page-open .volume-bar,
+.viz-fullscreen-active .volume-bar {
+    background: rgba(255, 255, 255, 0.25) !important;
+    /* More visible on dark bgs */
+    height: 6px !important;
+    /* Slightly thicker for easier interaction */
+}
+
+.lyrics-page-open .progress-fill,
+.viz-fullscreen-active .progress-fill,
+.lyrics-page-open .volume-fill,
+.viz-fullscreen-active .volume-fill {
+    background: #fff !important;
+}
+
 
 
 
@@ -708,8 +746,9 @@ body::before {
     display: flex;
     align-items: center;
     gap: 12px;
-    width: 25%;
+    width: 30%;
     min-width: 180px;
+    justify-content: flex-start;
 }
 
 .player-cover-wrap {
@@ -759,10 +798,10 @@ body::before {
     display: flex;
     flex-direction: column;
     align-items: center;
-    flex: 1;
-    gap: 6px;
-    max-width: 600px;
-    margin: 0 auto;
+    width: 40%;
+    max-width: 722px;
+    padding: 0 16px;
+    /* internal gap replacement */
 }
 
 .control-buttons {
@@ -902,8 +941,9 @@ body::before {
 }
 
 .player-extra {
-    width: 25%;
-    min-width: 120px;
+    width: 30%;
+    min-width: 180px;
+    /* match player-info for perfect balance */
     display: flex;
     justify-content: flex-end;
     align-items: center;
@@ -1470,10 +1510,46 @@ tr:hover .track-actions {
     overflow-y: auto;
     scrollbar-width: none;
     animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    height: 100%;
 }
 
 .lyrics-view::-webkit-scrollbar {
     display: none;
+}
+
+/* Sync Toggle UI */
+#btn-toggle-sync {
+    margin-right: 12px;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+#btn-toggle-sync.active svg {
+    color: var(--primary);
+    filter: drop-shadow(0 0 8px var(--primary));
+}
+
+/* Read-Only (Sync Disabled) State: Pure White, No Blur, No Hover Effects */
+.sync-disabled .lyric-line {
+    opacity: 1 !important;
+    color: #fff !important;
+    transform: none !important;
+    text-shadow: none !important;
+    filter: none !important;
+    transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1) !important;
+}
+
+.sync-disabled .lyric-line:hover {
+    transform: none !important;
+    text-shadow: none !important;
+    opacity: 0.85 !important;
+}
+
+/* Ensure individual words are also crystal clear in Reading Mode */
+.sync-disabled .word {
+    filter: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    color: inherit !important;
 }
 
 
@@ -1503,24 +1579,68 @@ tr:hover .track-actions {
     padding-top: 80px;
 }
 
-#lyrics-text .phrase {
-    opacity: 0.5;
-    transition: all 0.4s ease;
+#lyrics-text .phrase,
+#lyrics-text .lyric-line {
+    opacity: 0.3;
+    /* Removed transform and text-shadow transitions to allow 60fps zero-latency JS reactivity */
+    transition: opacity 0.5s ease, filter 0.5s ease;
     cursor: default;
     display: block;
-    margin-bottom: 0.5em;
+    margin-bottom: 0.6em;
+    transform-origin: center left;
+    filter: blur(2px);
 }
 
-#lyrics-text .phrase:hover {
+/* Instrumental gap fading */
+#lyrics-text.instrumental-mode {
+    opacity: 0.4;
+    transition: opacity 1.5s ease;
+    pointer-events: none;
+}
+
+#lyrics-text .phrase:hover,
+#lyrics-text .lyric-line:hover {
     opacity: 1;
     color: var(--primary);
+    filter: blur(0);
 }
 
-#lyrics-text .phrase.active {
+#lyrics-text .lyric-line.past {
+    opacity: 0.7;
+    color: var(--text-secondary);
+    filter: blur(0);
+}
+
+#lyrics-text .phrase.active,
+#lyrics-text .lyric-line.active {
     opacity: 1;
     color: #fff;
     transform: scale(1.02);
-    text-shadow: 0 0 30px rgba(255, 255, 255, 0.2);
+    /* More stable than 1.05 */
+    text-shadow: 0 0 25px rgba(255, 255, 255, 0.45);
+    filter: blur(0);
+}
+
+#lyrics-text .word {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    display: inline-block;
+    filter: blur(1px);
+    /* Slight blur for non-active words for cinematic focus */
+    opacity: 0.65;
+}
+
+#lyrics-text .lyric-line.active .word {
+    opacity: 0.8;
+    /* Brighter current line */
+    filter: blur(0);
+}
+
+#lyrics-text .lyric-line.active .word.active {
+    opacity: 1;
+    color: #fff;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 0 0 20px rgba(255, 255, 255, 0.4);
+    transform: scale(1.05);
+    /* Subtle pop */
 }
 
 #lyrics-credit {
@@ -1617,8 +1737,17 @@ tr:hover .track-actions {
     transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s;
 
     pointer-events: none;
-    transform: scale(var(--viz-scale));
+    transform: none;
+    /* Container itself shouldn't scale, only canvas */
     overflow: visible;
+}
+
+.visualizer-container canvas {
+    width: 100%;
+    height: 100%;
+    transform: scale(var(--viz-scale));
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-origin: center center;
 }
 
 
@@ -1631,7 +1760,7 @@ tr:hover .track-actions {
 
 .visualizer-container.hidden {
     opacity: 0;
-    transform: scale(calc(var(--viz-scale) * 0.8)) translateY(40px);
+    transform: scale(0.8) translateY(40px);
     pointer-events: none;
 }
 
@@ -1691,13 +1820,27 @@ tr:hover .track-actions {
     pointer-events: auto;
 }
 
+.header-left,
+.header-right {
+    flex: 1;
+    display: flex;
+    align-items: center;
+}
+
+.header-right {
+    justify-content: flex-end;
+}
+
 .header-now-playing {
+    flex: 2;
     display: flex;
     flex-direction: column;
+    align-items: center;
+    text-align: center;
     gap: 4px;
     width: auto;
     max-width: 60%;
-    min-width: 300px;
+    text-shadow: 0 2px 15px rgba(0, 0, 0, 0.9), 0 1px 4px rgba(0, 0, 0, 1);
 }
 
 
@@ -1741,7 +1884,8 @@ tr:hover .track-actions {
 
 .btn-close-immersive:hover {
     background: rgba(255, 255, 255, 0.2);
-    transform: rotate(90deg);
+    transform: scale(1.08);
+    /* Stable scale instead of jittery rotation */
 }
 
 .btn-close-immersive svg {

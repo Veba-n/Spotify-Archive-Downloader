@@ -96,16 +96,21 @@ export const Controls = {
             }
         };
 
-        $('btn-viz-toggle').onclick = () => {
-            const open = Store.toggleVisualizer();
-            this.updateVisualizerUI(open);
-            if (open) {
-                Visualizer.start();
-                Visualizer.updateTrackInfo(Store.currentTrack);
-            } else {
-                Visualizer.stop();
-            }
-        };
+        const vizToggles = ['btn-viz-toggle', 'btn-viz-toggle-lyrics', 'btn-viz-toggle-viz'];
+        vizToggles.forEach(id => {
+            const btn = $(id);
+            if (!btn) return;
+            btn.onclick = () => {
+                const open = Store.toggleVisualizer();
+                this.updateVisualizerUI(open);
+                if (open) {
+                    Visualizer.start();
+                    Visualizer.updateTrackInfo(Store.currentTrack);
+                } else {
+                    Visualizer.stop();
+                }
+            };
+        });
 
 
 
@@ -133,9 +138,12 @@ export const Controls = {
     },
 
     updateVisualizerUI(open) {
-        const btn = document.getElementById('btn-viz-toggle');
+        const toggles = ['btn-viz-toggle', 'btn-viz-toggle-lyrics', 'btn-viz-toggle-viz'];
+        toggles.forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn) btn.classList.toggle('active', open);
+        });
         const container = document.getElementById('visualizer-container');
-        if (btn) btn.classList.toggle('active', open);
         if (container) container.classList.toggle('hidden', !open);
     },
 

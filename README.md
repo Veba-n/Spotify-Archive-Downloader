@@ -238,17 +238,23 @@ All playback state is persisted to `localStorage` through `Store.savePlaybackSta
 
 **Color response.** Ring stroke color transitions from green toward cyan-white as volume increases. The green channel is boosted from 215 to 255, and a blue channel from 0 to 180 is introduced, producing a signature glow effect at high volumes. Ring opacity scales with both the active blend level and the current volume, making the visualization feel physically connected to the audio energy.
 
-### Lyrics Integration
+### Lyrics Integration & AI Sync
 
-`LyricsManager.js` fetches and displays song lyrics from the Genius API, with the backend acting as a CORS proxy.
+`LyricsManager.js` fetches and displays song lyrics from the Genius API, with the backend providing an optional **AI-powered synchronization engine (Whisper)** for frame-perfect karaoke playback.
 
-**API key requirement.** Lyrics are fetched using the user's personal Genius API key, stored locally in `localStorage` via `Store.geniusApiKey`. No server-side key is required. If no key is configured, the lyrics panel displays a prompt with a direct link to the Genius API client registration page.
+**AI Lyric Synchronization (Opt-in).** By default, the backend runs in **Lite Mode**, which consumes minimal resources. To enable AI sync, start the backend with the `--rsync-lyric` flag:
+```bash
+./start.sh --rsync-lyric
+```
+In this mode, the backend utilizes `faster-whisper` (running on CUDA if available) to align Genius lyrics with the audio stream in real-time.
 
-**Track-local caching.** Once fetched, lyrics and song metadata are stored in `this.currentData` for the lifetime of the session. Switching to the same track a second time does not trigger a new network request.
+**Word-Level Karaoke.** When AI sync is active, the player provides a premium karaoke experience with word-level highlighting and smooth auto-scrolling. The engine uses character-rate extrapolation to ensure perfectly timed transitions even for fast-paced tracks.
 
-**Genius search and metadata fetch.** The manager begins with a `GET https://api.genius.com/search?q={title}+{artist}` request to find the best-matching song. The top result's `url`, `id`, and `primary_artist.id` are stored. In parallel, it fires two additional requests to `GET /songs/{id}` and `GET /artists/{id}` to retrieve the song description and artist biography, which are displayed in the Details Panel.
+**Baked Sync Maps.** Once a song is synchronized successfully, the results are "baked" into a `.sync.json` file. Subsequent playbacks—even in **Lite Mode**—use these baked maps to provide instant, frame-perfect synchronization with zero CPU/GPU overhead.
 
-**Server-side lyrics proxy.** Genius renders lyrics in client-side JavaScript, making direct fetch-based scraping impossible due to CORS restrictions. To work around this, the player requests the Genius page through the backend at `GET /api/lyrics/proxy?url=...`, which fetches the full HTML server-side and returns it as JSON. The manager then parses this HTML in the browser using `DOMParser`, targeting `[class^="Lyrics__Container"]` and `.lyrics` elements.
+**Reading Mode.** A "Magic Sparkles" toggle in the immersive header allows users to switch between **Karaoke** (auto-sync) and **Reading Mode** (manual scroll with sharp white text).
+
+**Server-side lyrics proxy.** Genius renders lyrics in client-side JavaScript, making direct fetch-based scraping impossible due to CORS restrictions. To work around this, the player requests the Genius page through the backend at `GET /api/lyrics/proxy?url=...`, which fetches the full HTML server-side and returns it as JSON.
 
 **Garbage line filtering.** After extracting raw text from the HTML, the manager strips common UI artifacts from both the top and bottom of the lyrics block: contributor counts, translation labels, "X Lyrics" headers, "Embed" footers, "Share URL" prompts, and "Copy Embed Code" strings.
 

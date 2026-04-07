@@ -57,6 +57,9 @@ window.showToast = (msg, isError = false) => {
 
 export const App = {
     async init() {
+        // Load config and feature flags first
+        await LyricsManager.fetchConfig();
+
         // Load initial templates
         await ComponentLoader.load('sidebar', '/static/components/Sidebar.html');
         await ComponentLoader.load('playlist-view', '/static/components/Tracklist.html');
@@ -213,6 +216,8 @@ export const App = {
 
 window.app = App;
 window.player = PlayerEngine;
+window.PlayerEngine = PlayerEngine;
+window.Store = Store;
 window.LyricsManager = LyricsManager;
 window.Visualizer = Visualizer;
 

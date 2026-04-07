@@ -238,17 +238,23 @@ Tüm oynatma durumu, her parça değiştiğinde çağrılan `Store.savePlaybackS
 
 **Renk tepkisi.** Halka kontur (stroke) rengi, ses arttıkça yeşilden cam göbeği-beyaza (cyan-white) doğru geçiş yapar. Yeşil kanal 215'ten 255'e yükseltilir ve 0'dan 180'e kadar bir mavi kanal eklenerek yüksek ses seviyelerinde imza niteliğinde bir parlama etkisi yaratılır. Halka opaklığı hem aktif karışım (blend) seviyesi hem de mevcut ses seviyesi ile ölçeklenir ve görselleştirmenin ses enerjisiyle fiziksel olarak bağlantılı hissedilmesini sağlar.
 
-### Şarkı Sözü Entegrasyonu
+### Şarkı Sözü Entegrasyonu ve AI Senkronizasyon
 
-`LyricsManager.js`, arka ucun bir CORS proxy'si olarak hareket etmesiyle Genius API'sinden şarkı sözlerini getirir ve görüntüler.
+`LyricsManager.js`, Genius API üzerinden şarkı sözlerini getirir ve arka uçtaki isteğe bağlı **AI destekli senkronizasyon motoru (Whisper)** sayesinde kare bazında mükemmel karaoke deneyimi sunar.
 
-**API anahtarı gereksinimi.** Şarkı sözleri, kullanıcının `Store.geniusApiKey` aracılığıyla yerel olarak `localStorage` içinde depolanan kişisel Genius API anahtarı kullanılarak getirilir. Sunucu tarafında hiçbir anahtar gerekmez. Hiçbir anahtar yapılandırılmamışsa, şarkı sözleri paneli Genius API istemci kayıt sayfasına doğrudan bir bağlantı içeren bir uyarı (prompt) görüntüler.
+**AI Şarkı Sözü Senkronizasyonu (İsteğe Bağlı).** Varsayılan olarak arka uç, minimum kaynak tüketen **Hafif Mod** (Lite Mode) ile çalışır. AI senkronizasyonunu etkinleştirmek için arka ucu `--rsync-lyric` bayrağıyla başlatın:
+```bash
+./start.sh --rsync-lyric
+```
+Bu modda arka uç, Genius sözlerini ses akışıyla gerçek zamanlı olarak hizalamak için `faster-whisper` (varsa CUDA kullanarak) teknolojisini kullanır.
 
-**Parça-yerel önbelleğe alma (caching).** Getirildikten sonra, şarkı sözleri ve şarkı meta verileri oturum süresince `this.currentData` içinde saklanır. İkinci kez aynı parçaya geçmek yeni bir ağ isteğini tetiklemez.
+**Kelime Seviyesinde Karaoke.** AI senkronizasyonu aktif olduğunda, oynatıcı kelime bazlı vurgulama ve pürüzsüz otomatik kaydırma ile birinci sınıf bir karaoke deneyimi sunar. Motor, hızlı parçalarda bile mükemmel zamanlama sağlamak için karakter oranlı ekstrapolasyon kullanır.
 
-**Genius araması ve meta veri getirme.** Yönetici, en iyi eşleşen şarkıyı bulmak için bir `GET https://api.genius.com/search?q={title}+{artist}` isteğiyle başlar. En iyi sonucun `url`, `id` ve `primary_artist.id` değerleri saklanır. Paralel olarak, Detaylar Panelinde görüntülenen şarkı açıklamasını ve sanatçı biyografisini almak için `GET /songs/{id}` ve `GET /artists/{id}` hedeflerine iki ek istek gönderir.
+**Fırınlanmış (Baked) Senkronizasyon Haritaları.** Bir şarkı başarıyla senkronize edildiğinde, sonuçlar bir `.sync.json` dosyasına kaydedilir ("fırınlanır"). Sonraki oynatmalarda—**Hafif Mod**'da bile—bu haritalar kullanılır; böylece sıfır işlemci/grafik kartı yüküyle anında ve mükemmel senkronizasyon sağlanır.
 
-**Sunucu taraflı şarkı sözü proxy'si.** Genius, şarkı sözlerini istemci tarafı JavaScript'inde işler ve CORS kısıtlamaları nedeniyle doğrudan fetch (getirme) tabanlı veri çekmeyi imkansız hale getirir. Bunu aşmak için oynatıcı, arka uçtan `GET /api/lyrics/proxy?url=...` adresinden Genius sayfasını ister; arka uç tüm HTML'yi sunucu tarafında getirir ve JSON olarak döndürür. Yönetici daha sonra tarayıcıda `DOMParser` kullanarak bu HTML'yi ayrıştırır, `[class^="Lyrics__Container"]` ve `.lyrics` öğelerini hedefler.
+**Okuma Modu.** "Sihirli Parıltı" (Magic Sparkles) simgesiyle kullanıcılar **Karaoke** (otomatik senkron) ve **Okuma Modu** (beyaz metinli manuel kaydırma) arasında geçiş yapabilirler.
+
+**Sunucu taraflı şarkı sözü proxy'si.** Genius, şarkı sözlerini istemci tarafı JavaScript'inde işlediği için CORS kısıtlamaları doğrudan çekmeyi imkansız hale getirir. Bunu aşmak için oynatıcı, arka uçtan sunucu taraflı HTML çekip JSON olarak döndüren `GET /api/lyrics/proxy?url=...` isteğini kullanır.
 
 **Gereksiz satır filtreleme.** HTML'den ham metin çıkarıldıktan sonra, yönetici şarkı sözü bloğunun hem üstündeki hem de altındaki yaygın kullanıcı arayüzü kalıntılarını temizler: katkıda bulunan sayımları, çeviri etiketleri, "X Şarkı Sözleri" başlıkları, "Embed" alt bilgileri, "URL'yi Paylaş" uyarıları ve "Embed Kodunu Kopyala" dizeleri.
 

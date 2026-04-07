@@ -8,8 +8,21 @@ if [ -d "$VENV_DIR" ]; then
     echo "🐍 Venv active: $VENV_DIR"
 fi
 
+RSYNC_ENABLED=false
+for arg in "$@"; do
+    if [ "$arg" == "--rsync-lyric" ]; then
+        RSYNC_ENABLED=true
+    fi
+done
+
 echo "📦 Checking dependencies..."
-pip3 install -r requirements.txt -q 2>/dev/null || pip install -r requirements.txt -q
+if [ "$RSYNC_ENABLED" = true ]; then
+    echo "🎤 AI Sync Enabled. Installing heavy dependencies (Whisper/Torch)..."
+    pip3 install -r requirements.txt -r requirements-gpu.txt -q || pip install -r requirements.txt -r requirements-gpu.txt -q
+else
+    echo "⚡ Lite Mode. Installing basic dependencies..."
+    pip3 install -r requirements.txt -q || pip install -r requirements.txt -q
+fi
 
 echo "🔧 Checking FFmpeg..."
 if ! command -v ffmpeg &> /dev/null; then
@@ -21,4 +34,4 @@ if ! command -v ffmpeg &> /dev/null; then
 fi
 
 echo "🚀 Starting backend..."
-python main.py
+python main.py "$@"
